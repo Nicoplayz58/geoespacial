@@ -9,7 +9,7 @@ import plotly.express as px
 print("======== INICIO APP ========")
 
 app = Dash(__name__, suppress_callback_exceptions=True)
-server = app.server  
+server = app.server
 # Procesamiento de datos geográficos y estadísticos
 
 # Leer shapefile y CSV
@@ -56,9 +56,6 @@ variables = {
     "VOLUMEN_POR_EDS": "Volumen promedio por EDS (m³)"
 }
 
-# Crear app Dash
-app = Dash(__name__, server=server, suppress_callback_exceptions=True)
-server = app.server
 print("======== APP CREADA ========")
 
 # Estilo dark mode
