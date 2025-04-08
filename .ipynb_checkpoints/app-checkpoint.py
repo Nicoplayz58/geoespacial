@@ -9,8 +9,7 @@ import plotly.express as px
 print("======== INICIO APP ========")
 
 app = Dash(__name__, suppress_callback_exceptions=True)
-server = app.server
-
+server = app.server  
 # Procesamiento de datos geográficos y estadísticos
 
 # Leer shapefile y CSV
@@ -57,6 +56,9 @@ variables = {
     "VOLUMEN_POR_EDS": "Volumen promedio por EDS (m³)"
 }
 
+# Crear app Dash
+app = Dash(__name__, server=server, suppress_callback_exceptions=True)
+server = app.server
 print("======== APP CREADA ========")
 
 # Estilo dark mode
@@ -174,7 +176,7 @@ def render_tab(tab):
             ], style={"width": "60%", "padding": "30px"}),
 
             html.Div([
-                html.Img(src="/assets/gasoline.png", style={
+                html.Img(src="/assets/Gasoline.png", style={
                     "width": "100%",
                     "maxWidth": "300px",
                     "margin": "auto",
