@@ -42,8 +42,6 @@ variables = {
 # Crear app
 app = Dash(__name__, suppress_callback_exceptions=True)
 
-app = Dash(__name__, suppress_callback_exceptions=True)
-
 app.index_string = '''
 <!DOCTYPE html>
 <html>
