@@ -6,6 +6,12 @@ import json
 import os
 from shapely import wkb
 
+print("======== INICIO APP ========")
+app = Dash(__name__, suppress_callback_exceptions=True)
+server = app.server
+print("======== APP CREADA ========")
+
+
 # Leer o reconstruir datos
 if os.path.exists("mapa_dep.parquet"):
     mapa_dep = pd.read_parquet("mapa_dep.parquet")
@@ -215,5 +221,3 @@ def actualizar_mapa(variable):
     )
     
     return fig
-
-server = app.server
