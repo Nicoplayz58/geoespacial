@@ -11,21 +11,6 @@ if os.path.exists("mapa_dep.parquet"):
     mapa_dep = pd.read_parquet("mapa_dep.parquet")
     mapa_dep["geometry"] = mapa_dep["geometry"].apply(wkb.loads)
     mapa_dep = gpd.GeoDataFrame(mapa_dep, geometry="geometry", crs="EPSG:4326")
-else:
-    df_dep = merged.groupby("DPTO_CNMBR").agg({
-        "CANTIDAD_VOLUMEN_SUMINISTRADO": "sum",
-        "NUMERO_DE_VENTAS": "sum",
-        "VEHICULOS_ATENDIDOS": "sum",
-        "EDS_ACTIVAS": "sum"
-    }).reset_index()
-
-    df_dep["VOLUMEN_POR_EDS"] = df_dep["CANTIDAD_VOLUMEN_SUMINISTRADO"] / df_dep["EDS_ACTIVAS"]
-    df_dep["VOLUMEN_MILLONES"] = df_dep["CANTIDAD_VOLUMEN_SUMINISTRADO"] / 1e6
-    df_dep["VENTAS_MILLONES"] = df_dep["NUMERO_DE_VENTAS"] / 1e6
-    df_dep["VEHICULOS_MILLONES"] = df_dep["VEHICULOS_ATENDIDOS"] / 1e6
-
-    mapa_dep = gdf.dissolve(by="DPTO_CNMBR", as_index=False).merge(df_dep, on="DPTO_CNMBR")
-    mapa_dep.to_parquet("mapa_dep.parquet")
 
 # Simplificar geometría para performance
 gdf_geo = mapa_dep[["DPTO_CNMBR", "geometry"]].copy()
