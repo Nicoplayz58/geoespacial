@@ -1,28 +1,52 @@
-from dash import Dash, dcc, html, Input, Output
-import plotly.express as px
+import os
+import json
 import pandas as pd
 import geopandas as gpd
-import json
-import os
 from shapely import wkb
+from dash import Dash, dcc, html, Input, Output
+import plotly.express as px
 
 print("======== INICIO APP ========")
-app = Dash(__name__, suppress_callback_exceptions=True)
-server = app.server
-print("======== APP CREADA ========")
 
+# Procesamiento de datos geográficos y estadísticos
 
-# Leer o reconstruir datos
-if os.path.exists("mapa_dep.parquet"):
-    mapa_dep = pd.read_parquet("mapa_dep.parquet")
-    mapa_dep["geometry"] = mapa_dep["geometry"].apply(wkb.loads)
-    mapa_dep = gpd.GeoDataFrame(mapa_dep, geometry="geometry", crs="EPSG:4326")
+# Leer shapefile y CSV
+gdf = gpd.read_file("MGN_MPIO_POLITICO.shp", encoding='utf-8')
+df = pd.read_csv("ventas.csv")
 
-# Simplificar geometría para performance
+# Crear código DANE completo
+gdf["DANE_COMPLETO"] = gdf["DPTO_CCDGO"].astype(str).str.zfill(2) + gdf["MPIO_CCDGO"].astype(str).str.zfill(3)
+df["CODIGO_MUNICIPIO_DANE"] = df["CODIGO_MUNICIPIO_DANE"].astype(str).str.zfill(5)
+
+# Unir datos geográficos con los datos de ventas
+merged = gdf.merge(df, left_on="DANE_COMPLETO", right_on="CODIGO_MUNICIPIO_DANE")
+
+# Agregación por departamento
+df_dep = merged.groupby("DPTO_CNMBR").agg({
+    "CANTIDAD_VOLUMEN_SUMINISTRADO": "sum",
+    "VEHICULOS_ATENDIDOS": "sum",
+    "NUMERO_DE_VENTAS": "sum",
+    "EDS_ACTIVAS": "sum"
+}).reset_index()
+
+df_dep["VOLUMEN_POR_EDS"] = df_dep["CANTIDAD_VOLUMEN_SUMINISTRADO"] / df_dep["EDS_ACTIVAS"]
+
+# Crear geometría por departamento
+gdf_departamentos = gdf.dissolve(by="DPTO_CNMBR", as_index=False)
+
+# Unir geometría con datos agregados
+mapa_dep = gdf_departamentos.merge(df_dep, on="DPTO_CNMBR")
+
+# Crear columnas en millones
+mapa_dep["VOLUMEN_MILLONES"] = mapa_dep["CANTIDAD_VOLUMEN_SUMINISTRADO"] / 1e6
+mapa_dep["VEHICULOS_MILLONES"] = mapa_dep["VEHICULOS_ATENDIDOS"] / 1e6
+mapa_dep["VENTAS_MILLONES"] = mapa_dep["NUMERO_DE_VENTAS"] / 1e6
+
+# Simplificación para el mapa
 gdf_geo = mapa_dep[["DPTO_CNMBR", "geometry"]].copy()
 gdf_geo["geometry"] = gdf_geo.simplify(tolerance=0.01, preserve_topology=True)
 
-# Diccionario de variables y etiquetas
+# Diccionario de variables para visualización
 variables = {
     "VOLUMEN_MILLONES": "Volumen suministrado (millones m³)",
     "VENTAS_MILLONES": "Número de ventas (millones)",
@@ -30,9 +54,12 @@ variables = {
     "VOLUMEN_POR_EDS": "Volumen promedio por EDS (m³)"
 }
 
-# Crear app
+# Crear app Dash
 app = Dash(__name__, suppress_callback_exceptions=True)
+server = app.server
+print("======== APP CREADA ========")
 
+# Estilo dark mode
 app.index_string = '''
 <!DOCTYPE html>
 <html>
@@ -61,7 +88,7 @@ app.index_string = '''
 </html>
 '''
 
-
+# Layout principal
 app.layout = html.Div([
     html.H1("Dashboard de Consumo de Gas Vehicular", style={"textAlign": "center", "color": "white"}),
 
@@ -76,6 +103,7 @@ app.layout = html.Div([
     html.Div(id='contenido-tab', style={"padding": "20px"})
 ], style={"backgroundColor": "#141627", "fontFamily": "Arial"})
 
+# Callbacks
 @app.callback(
     Output("contenido-tab", "children"),
     Input("tabs", "value")
@@ -99,33 +127,24 @@ def render_tab(tab):
                         "marginRight": "10px",
                         "width": "20px",
                         "height": "20px",
-                        "accentColor": "limegreen"  # verde
+                        "accentColor": "limegreen"
                     }
                 )
-            ], style={
-                "width": "20%",
-                "display": "flex",
-                "flexDirection": "column",
-                "justifyContent": "center",
-                "alignItems": "center",
-                "padding": "20px"
-            }),
-    
+            ], style={"width": "20%", "padding": "20px"}),
+
             html.Div([
                 dcc.Graph(id="mapa")
-            ], style={"width": "75%", "display": "inline-block", "verticalAlign": "middle"})
+            ], style={"width": "75%", "display": "inline-block"})
         ], style={"display": "flex", "alignItems": "center"})
 
     elif tab == 'graficos':
-        fig1 = px.bar(df["ANIO_VENTA"].value_counts().sort_index(), labels={"value": "Número de ventas", "index": "Año"}, title="Cantidad de ventas por año", color_discrete_sequence=["skyblue"])
         fig2 = px.bar(mapa_dep.sort_values("VOLUMEN_MILLONES", ascending=False).head(10), x="DPTO_CNMBR", y="VOLUMEN_MILLONES", title="Top 10 departamentos por volumen", color_discrete_sequence=["orange"])
         fig3 = px.bar(mapa_dep.sort_values("VEHICULOS_MILLONES", ascending=False).head(10), x="DPTO_CNMBR", y="VEHICULOS_MILLONES", title="Top 10 departamentos por vehículos", color_discrete_sequence=["purple"])
 
-        for fig in [fig1, fig2, fig3]:
+        for fig in [fig2, fig3]:
             fig.update_layout(paper_bgcolor="#141627", plot_bgcolor="#141627", font_color="white")
 
         return html.Div([
-            dcc.Graph(figure=fig1),
             dcc.Graph(figure=fig2),
             dcc.Graph(figure=fig3)
         ])
@@ -146,22 +165,14 @@ def render_tab(tab):
         return html.Div([
             html.Div([
                 html.H3("Contexto del problema", style={"color": "white"}),
-                html.P(
-                    "En Colombia, el gas natural vehicular (GNV) se ha convertido en una alternativa económica "
+                html.P("En Colombia, el gas natural vehicular (GNV) se ha convertido en una alternativa económica "
                     "y ambientalmente sostenible frente a otros combustibles. Sin embargo, su consumo varía significativamente "
                     "entre los departamentos. Este dashboard permite visualizar el comportamiento del GNV en todo el país durante "
                     "el último año disponible, analizando variables como el volumen suministrado, ventas, número de vehículos "
                     "atendidos y eficiencia por estación.",
-                    style={"color": "white", "textAlign": "justify", "fontSize": "16px"}
-                ),
-                html.P(
-                    "El objetivo de este análisis es identificar patrones de consumo, posibles desigualdades en la cobertura del servicio "
-                    "y oportunidades de mejora en la distribución del gas vehicular. Esta herramienta busca facilitar la toma de decisiones "
-                    "para entidades públicas, empresas del sector energético y ciudadanos interesados.",
-                    style={"color": "white", "textAlign": "justify", "fontSize": "16px"}
-                )
+                       style={"color": "white", "textAlign": "justify", "fontSize": "16px"})
             ], style={"width": "60%", "padding": "30px"}),
-    
+
             html.Div([
                 html.Img(src="/assets/gasoline.png", style={
                     "width": "100%",
@@ -175,7 +186,6 @@ def render_tab(tab):
         ],
         style={"display": "flex", "backgroundColor": "#141627", "flexDirection": "row"})
 
-
 @app.callback(
     Output("stored-variable", "data"),
     Input("variable", "value")
@@ -188,7 +198,6 @@ def guardar_variable(variable):
     Input("stored-variable", "data")
 )
 def actualizar_mapa(variable):
-    # Capa base: croquis de todos los departamentos
     fig = px.choropleth(
         mapa_dep,
         geojson=json.loads(gdf_geo.to_json()),
@@ -201,23 +210,7 @@ def actualizar_mapa(variable):
         hover_name="DPTO_CNMBR"
     )
 
-    # Mostrar el croquis completo de Colombia
-    fig.update_geos(
-        fitbounds="locations",
-        visible=False,
-        showcountries=True,
-        showcoastlines=True,
-        showland=True,
-        landcolor="#f5f5f5",  # fondo claro para que resalten los colores
-        lakecolor="#a6cee3"
-    )
-
-    # Estilo general
-    fig.update_layout(
-        margin={"r": 0, "t": 0, "l": 0, "b": 0},
-        paper_bgcolor="#141627",
-        plot_bgcolor="#141627",
-        font_color="white"
-    )
+    fig.update_geos(fitbounds="locations", visible=False)
+    fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0}, paper_bgcolor="#141627", plot_bgcolor="#141627", font_color="white")
     
     return fig
