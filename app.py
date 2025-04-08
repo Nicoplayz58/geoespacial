@@ -214,3 +214,6 @@ def actualizar_mapa(variable):
     fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0}, paper_bgcolor="#141627", plot_bgcolor="#141627", font_color="white")
     
     return fig
+
+if __name__ == '__main__':
+    app.run(debug=True)
