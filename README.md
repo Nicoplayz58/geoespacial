@@ -51,8 +51,8 @@ Este proyecto es una aplicación web interactiva desarrollada con [Plotly Dash](
 ### 1. Clona el repositorio
 
 ```bash
-git clone https://github.com/tuusuario/dash-gas-colombia.git
-cd dash-gas-colombia
+git clone https://github.com/Nicoplayz58/geoespacial.git
+cd geoespacial
 ```
 
 ### 2. Crea un entorno virtual (opcional pero recomendado)
